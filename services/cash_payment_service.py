@@ -5,7 +5,7 @@ from models.sales_transaction import SalesTransaction
 from models.sales_transaction_item import SalesTransactionItem
 from utils.cash_code import generate_unique_cash_code
 from datetime import datetime, timedelta
-from ml.recommender.updater import on_successful_payment
+# from ml.recommender.updater import on_successful_payment
 
 class CashPaymentService:
 
@@ -89,10 +89,10 @@ class CashPaymentService:
             db.session.commit()  # commit all DB changes first
 
             # trigger recommender update, safely
-            try:
-                on_successful_payment()
-            except Exception as e:
-                print("WARNING: recommender update failed:", e)
+            # try:
+            #     on_successful_payment()
+            # except Exception as e:
+            #     print("WARNING: recommender update failed:", e)
 
             return transaction.id
 

@@ -7,7 +7,7 @@ from flask_cors import CORS
 from db import db
 from urls import register_routes
 
-from ml.recommender.trainer import retrain_model
+# from ml.recommender.trainer import retrain_model
 
 app = Flask(__name__)
 
@@ -49,7 +49,7 @@ def handle_options():
 # 🗄 DATABASE (POSTGRES)
 # --------------------------------------------------
 app.config["SQLALCHEMY_DATABASE_URI"] = (
-    "postgresql://postgres:12345678@localhost:5432/rat"
+    "postgresql://postgres:12345678@localhost:5432/test"
 )
 
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
@@ -77,10 +77,10 @@ def index():
 # 🚀 START SERVER
 # --------------------------------------------------
 if __name__ == "__main__":
-    import threading
+    # import threading
     with app.app_context():
         db.create_all()
-        threading.Thread(target=retrain_model, daemon=True).start()
+        # threading.Thread(target=retrain_model, daemon=True).start()
 
     app.run(
         host="0.0.0.0",
