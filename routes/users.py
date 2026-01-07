@@ -67,7 +67,21 @@ def require_auth(roles=("admin",)):
 # GET CURRENT USER (USED BY VUE)
 # =========================
 @user_routes.route("/me", methods=["GET"])
-@require_auth(roles=("admin", "customer")) # Add customer for now to enable auth in React
+@require_auth(roles=("admin",)) 
+def me():
+    user = g.current_user
+    return jsonify({
+        "authenticated": True,
+        "id": user.id,
+        "username": user.username,
+        "role": user.role
+    }), 200
+
+# =========================
+# GET CURRENT USER (USED BY REACT)
+# =========================
+@user_routes.route("/me/customer", methods=["GET"])
+@require_auth(roles=("customer",)) 
 def me():
     user = g.current_user
     return jsonify({
