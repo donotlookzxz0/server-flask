@@ -10,7 +10,7 @@ def start_cash_payment():
     cart = data.get("cart", [])
     print("DEBUG /start cart:", cart)  # <-- see what frontend sends
 
-    user_id = 1
+    user_id = g.current_user.id
 
     try:
         pending = CashPaymentService.create_pending_payment(
