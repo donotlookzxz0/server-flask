@@ -68,7 +68,7 @@ def require_auth(roles=("admin",)):
 # =========================
 @user_routes.route("/me", methods=["GET"])
 @require_auth(roles=("admin",)) 
-def me():
+def me_admin():
     user = g.current_user
     return jsonify({
         "authenticated": True,
@@ -82,7 +82,7 @@ def me():
 # =========================
 @user_routes.route("/me/customer", methods=["GET"])
 @require_auth(roles=("customer",)) 
-def me():
+def me_customer():
     user = g.current_user
     return jsonify({
         "authenticated": True,
