@@ -49,7 +49,7 @@ def handle_options():
 # 🗄 DATABASE (POSTGRES)
 # --------------------------------------------------
 app.config["SQLALCHEMY_DATABASE_URI"] = (
-    "postgresql://postgres:12345678@localhost:5432/test"
+    "postgresql://postgres:12345678@localhost:5432/rat"
 )
 
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
