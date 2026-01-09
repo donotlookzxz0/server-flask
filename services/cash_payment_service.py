@@ -1,102 +1,148 @@
+# services/cash_payment_service.py
 from db import db
-from models.pending_cash_payment import PendingCashPayment
-from models.item import Item
 from models.sales_transaction import SalesTransaction
 from models.sales_transaction_item import SalesTransactionItem
-from utils.cash_code import generate_unique_cash_code
+from models.item import Item
+from models.pending_cash_payment import PendingCashPayment
 from datetime import datetime, timedelta
-# from ml.recommender.updater import on_successful_payment
+import random
+from sqlalchemy.exc import IntegrityError
 
 class CashPaymentService:
 
     @staticmethod
     def create_pending_payment(user_id, cart):
+        """
+        Creates a pending payment for the user.
+        If there's already a PENDING payment for the user, return it.
+        Expired codes are automatically cancelled.
+        """
+        existing = PendingCashPayment.query.filter_by(user_id=user_id, status="PENDING").first()
 
-    # Cancel any existing active code for this user
-        PendingCashPayment.query.filter_by(
-            user_id=user_id,
-            status="PENDING"
-        ).update({"status": "CANCELLED"})
+        if existing:
+            # Cancel expired code if present
+            if existing.expires_at and existing.expires_at < datetime.utcnow():
+                existing.status = "CANCELLED"
+                db.session.commit()
+            else:
+                return existing
 
-        db.session.flush()
-
-        # Validate cart
-        for entry in cart:
-            item = Item.query.filter_by(barcode=entry["barcode"]).first()
-            if not item:
-                raise Exception(f"Item not found: {entry['barcode']}")
-            if item.quantity < entry["quantity"]:
-                raise Exception(f"Insufficient stock for {item.name}")
-
-        expires_at = datetime.utcnow() + timedelta(minutes=10)
-
-        # Create UNIQUE code safely
-        pending = generate_unique_cash_code(
-            user_id=user_id,
-            cart=cart,
-            expires_at=expires_at
-        )
-
+        # Create a new pending payment with a unique code
+        pending = CashPaymentService._create_pending_payment_with_unique_code(user_id, cart, expires_minutes=10)
         return pending
 
     @staticmethod
-    def update_cart(code, new_cart):
-        pending = PendingCashPayment.query.filter_by(code=code, status="PENDING").first()
+    def generate_code(pending_id):
+        """
+        Generate a new 6-digit code for an existing pending payment.
+        Cancels expired code automatically if needed.
+        """
+        pending = PendingCashPayment.query.filter_by(id=pending_id, status="PENDING").first()
         if not pending:
-            raise Exception("Invalid or expired code")
+            raise Exception("Pending payment not found")
 
-        pending.cart = new_cart
-        db.session.commit()
+        # If existing code is expired, keep status as PENDING but update code
+        CashPaymentService._update_pending_with_new_code(pending, expires_seconds=30)
         return pending
-
-    @staticmethod
-    def cancel_payment(code):
-        pending = PendingCashPayment.query.filter_by(code=code, status="PENDING").first()
-        if not pending:
-            raise Exception("Invalid or expired code")
-
-        pending.status = "CANCELLED"
-        db.session.commit()
 
     @staticmethod
     def confirm_payment(code):
         pending = PendingCashPayment.query.filter_by(code=code, status="PENDING").first()
         if not pending:
-            raise Exception("Invalid or expired code")
+            existing = PendingCashPayment.query.filter_by(code=code).first()
+            if existing:
+                if existing.status == "PAID":
+                    raise Exception("This cash code has already been used.")
+                elif existing.status == "CANCELLED":
+                    raise Exception("This cash code was cancelled. Please request a new one.")
+            raise Exception("Invalid or expired cash code")
 
-        try:
-            # create transaction
-            transaction = SalesTransaction(user_id=pending.user_id)
-            db.session.add(transaction)
-            db.session.flush()
+        if pending.expires_at < datetime.utcnow():
+            pending.status = "CANCELLED"
+            db.session.commit()
+            raise Exception("Cash code expired, please generate a new one")
 
-            for entry in pending.cart:
-                item = Item.query.filter_by(barcode=entry["barcode"]).first()
-                if item.quantity < entry["quantity"]:
-                    raise Exception(f"Stock changed for {item.name}")
+        # Mark as PAID
+        pending.status = "PAID"
+        db.session.commit()
 
-                item.quantity -= entry["quantity"]
+        # -----------------------------
+        # Create Sales Transaction
+        # -----------------------------
+        cart_items = pending.cart or []  # [{'barcode': ..., 'quantity': ...}, ...]
 
-                db.session.add(SalesTransactionItem(
-                    transaction_id=transaction.id,
-                    item_id=item.id,
-                    quantity=entry["quantity"],
-                    price_at_sale=item.price
-                ))
+        if not cart_items:
+            raise Exception("Pending payment cart is empty")
 
-            # mark as paid
-            pending.status = "PAID"
-            db.session.commit()  # commit all DB changes first
+        transaction = SalesTransaction(user_id=pending.user_id)
+        db.session.add(transaction)
+        db.session.flush()  # ensure transaction.id is available
 
-            # trigger recommender update, safely
-            # try:
-            #     on_successful_payment()
-            # except Exception as e:
-            #     print("WARNING: recommender update failed:", e)
+        for entry in cart_items:
+            barcode = entry.get("barcode")
+            qty = entry.get("quantity")
 
-            return transaction.id
+            if not barcode or not qty:
+                continue  # skip invalid entries
 
-        except Exception as e:
-            db.session.rollback()  # revert any DB changes if something fails
-            raise e
+            item = Item.query.filter_by(barcode=barcode).first()
+            if not item:
+                raise Exception(f"Item not found: {barcode}")
 
+            if item.quantity < qty:
+                raise Exception(f"Not enough stock for {item.name}")
+
+            # Deduct stock
+            item.quantity -= qty
+
+            # Create SalesTransactionItem
+            transaction_item = SalesTransactionItem(
+                transaction_id=transaction.id,
+                item_id=item.id,
+                quantity=qty,
+                price_at_sale=item.price
+            )
+            db.session.add(transaction_item)
+
+        db.session.commit()
+        return transaction.id
+
+    @staticmethod
+    def cancel_payment(code):
+        pending = PendingCashPayment.query.filter_by(code=code, status="PENDING").first()
+        if pending:
+            pending.status = "CANCELLED"
+            db.session.commit()
+
+    # ------------------------
+    # Private helper methods
+    # ------------------------
+    @staticmethod
+    def _create_pending_payment_with_unique_code(user_id, cart, expires_minutes=10):
+        expires_at = datetime.utcnow() + timedelta(minutes=expires_minutes)
+        while True:
+            try:
+                code = f"{random.randint(100000, 999999)}"
+                pending = PendingCashPayment(
+                    user_id=user_id,
+                    code=code,
+                    cart=cart,
+                    expires_at=expires_at
+                )
+                db.session.add(pending)
+                db.session.commit()
+                return pending
+            except IntegrityError:
+                db.session.rollback()  # retry if code already exists
+
+    @staticmethod
+    def _update_pending_with_new_code(pending, expires_seconds=30):
+        pending.expires_at = datetime.utcnow() + timedelta(seconds=expires_seconds)
+        while True:
+            try:
+                # Assign a new unique 6-digit code
+                pending.code = f"{random.randint(100000, 999999)}"
+                db.session.commit()
+                return pending
+            except IntegrityError:
+                db.session.rollback()  # retry if generated code already exists
