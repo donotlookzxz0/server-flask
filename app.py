@@ -2,7 +2,7 @@
 # FINAL SAFE VERSION — COOKIE AUTH + POSTGRES + CORS (PRODUCTION READY)
 
 import os
-from flask import Flask, request, jsonify
+from flask import Flask
 from flask_cors import CORS
 
 from db import db
@@ -17,7 +17,7 @@ app.config["SECRET_KEY"] = "super-secret"
 
 app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_SAMESITE"] = "None"   # REQUIRED for cross-origin cookies
-app.config["SESSION_COOKIE_SECURE"] = True       # ✅ MUST be TRUE (HTTPS)
+app.config["SESSION_COOKIE_SECURE"] = True       # MUST be TRUE for HTTPS
 
 # --------------------------------------------------
 # 🌍 CORS (ALLOW CREDENTIALS + CRUD)
@@ -39,16 +39,6 @@ CORS(
     methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Content-Type", "Authorization"]
 )
-
-# --------------------------------------------------
-# 🚫 GLOBAL PREFLIGHT HANDLER (OPTIONS)
-# --------------------------------------------------
-@app.before_request
-def handle_options():
-    if request.method == "OPTIONS":
-        response = jsonify({})
-        response.status_code = 200
-        return response
 
 # --------------------------------------------------
 # 🗄 DATABASE (POSTGRESQL — RENDER)
