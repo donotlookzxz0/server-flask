@@ -7,7 +7,9 @@ from db import db
 from datetime import datetime, timedelta
 from models.user import User
 import jwt
-from functools import wraps
+
+# ✅ IMPORT THE SHARED AUTH DECORATOR
+from utils.auth_restrict import require_auth
 
 user_routes = Blueprint("user_routes", __name__)
 
@@ -19,12 +21,11 @@ ACCESS_EXPIRES = timedelta(minutes=15)
 REFRESH_EXPIRES = timedelta(days=7)
 
 # ✅ REQUIRED FOR VERCEL / SAFARI / IOS
-# 🔥 FIX: added path="/"
 COOKIE_KWARGS = dict(
     httponly=True,
     samesite="None",   # 🔥 CRITICAL
     secure=True,       # 🔥 CRITICAL
-    path="/"           # 🔥 IMPORTANT (mobile + consistency)
+    path="/"           # 🔥 IMPORTANT
 )
 
 # --------------------------------------------------
@@ -40,42 +41,6 @@ def create_token(user_id, token_type="access"):
     return jwt.encode(payload, JWT_SECRET, algorithm="HS256")
 
 # --------------------------------------------------
-# AUTH DECORATOR
-# --------------------------------------------------
-def require_auth(roles=()):
-    def decorator(fn):
-        @wraps(fn)
-        def wrapper(*args, **kwargs):
-            token = request.cookies.get("access_token")
-
-            if not token:
-                return jsonify({"error": "Authentication required"}), 401
-
-            try:
-                payload = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
-
-                if payload.get("type") != "access":
-                    return jsonify({"error": "Invalid token type"}), 401
-
-                user = User.query.get(payload["user_id"])
-                if not user:
-                    return jsonify({"error": "User not found"}), 401
-
-                if roles and user.role not in roles:
-                    return jsonify({"error": "Forbidden"}), 403
-
-                g.current_user = user
-
-            except jwt.ExpiredSignatureError:
-                return jsonify({"error": "Token expired"}), 401
-            except jwt.InvalidTokenError:
-                return jsonify({"error": "Invalid token"}), 401
-
-            return fn(*args, **kwargs)
-        return wrapper
-    return decorator
-
-# --------------------------------------------------
 # CURRENT USER
 # --------------------------------------------------
 @user_routes.route("/me", methods=["GET"])
@@ -88,6 +53,7 @@ def me_admin():
         "username": user.username,
         "role": user.role
     }), 200
+
 
 @user_routes.route("/me/customer", methods=["GET"])
 @require_auth(roles=("customer",))
@@ -118,6 +84,7 @@ def get_users():
         for u in users
     ]), 200
 
+
 @user_routes.route("/<int:id>", methods=["GET"])
 def get_user(id):
     user = User.query.get(id)
@@ -131,6 +98,7 @@ def get_user(id):
         "created_at": user.created_at,
         "updated_at": user.updated_at,
     }), 200
+
 
 @user_routes.route("", methods=["POST"])
 @user_routes.route("/", methods=["POST"])
@@ -251,7 +219,6 @@ def logout():
             pass
 
     resp = make_response(jsonify({"message": "logged out"}))
-    # 🔥 FIX: delete cookies with SAME FLAGS
     resp.delete_cookie("access_token", **COOKIE_KWARGS)
     resp.delete_cookie("refresh_token", **COOKIE_KWARGS)
     return resp, 200

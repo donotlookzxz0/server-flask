@@ -17,14 +17,12 @@ sales_bp = Blueprint("sales", __name__)
 def get_all_transactions():
     transactions = (
         SalesTransaction.query
-        .order_by(SalesTransaction.date.desc())  # ✅ FIX: newest first
+        .order_by(SalesTransaction.date.desc())
         .all()
     )
 
-    result = []
-
-    for t in transactions:
-        result.append({
+    return jsonify([
+        {
             "transaction_id": t.id,
             "date": t.date.isoformat(),
             "user_id": t.user.id,
@@ -38,13 +36,13 @@ def get_all_transactions():
                 }
                 for ti in t.items
             ]
-        })
-
-    return jsonify(result), 200
+        }
+        for t in transactions
+    ]), 200
 
 
 # --------------------------------------------------
-# 🔵 GET a single transaction by ID (ADMIN ONLY)
+# 🔵 GET single transaction (ADMIN ONLY)
 # --------------------------------------------------
 @sales_bp.route("/<int:id>", methods=["GET"])
 @require_auth(roles=("admin",))
@@ -71,10 +69,10 @@ def get_transaction(id):
 
 
 # --------------------------------------------------
-# 🟢 CREATE new transaction (EVERY LOGGED-IN USER)
+# 🟢 CREATE transaction (ANY AUTHENTICATED USER)
 # --------------------------------------------------
 @sales_bp.route("/", methods=["POST"])
-@require_auth(roles=None)
+@require_auth()   # ✅ FIXED
 def create_transaction():
     data = request.get_json() or {}
     cart_items = data.get("items", [])
@@ -82,9 +80,7 @@ def create_transaction():
     if not cart_items:
         return jsonify({"error": "No items provided"}), 400
 
-    transaction = SalesTransaction(
-        user_id=g.current_user.id
-    )
+    transaction = SalesTransaction(user_id=g.current_user.id)
     db.session.add(transaction)
 
     for entry in cart_items:
@@ -143,15 +139,9 @@ def update_transaction(id):
         item_id = entry.get("item_id")
         qty = entry.get("quantity")
 
-        if not item_id or not qty:
-            return jsonify({"error": "item_id and quantity required"}), 400
-
         item = Item.query.get(item_id)
-        if not item:
-            return jsonify({"error": f"Item {item_id} not found"}), 400
-
-        if item.quantity < qty:
-            return jsonify({"error": f"Not enough stock for {item.name}"}), 400
+        if not item or item.quantity < qty:
+            return jsonify({"error": "Invalid item or insufficient stock"}), 400
 
         item.quantity -= qty
 
@@ -163,11 +153,7 @@ def update_transaction(id):
         ))
 
     db.session.commit()
-
-    return jsonify({
-        "message": "Transaction updated",
-        "transaction_id": t.id
-    }), 200
+    return jsonify({"message": "Transaction updated"}), 200
 
 
 # --------------------------------------------------
