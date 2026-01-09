@@ -1,11 +1,12 @@
 # ml/time_series_forecast.py
-# TRUE TIME-SERIES PREDICTION WITH OUTLIER CONTROL
-# Uses LOG TRANSFORMATION (BEST PRACTICE)
+# STABLE + REPRODUCIBLE TIME-SERIES DEMAND FORECAST
+# Fixes: randomness, shuffle, leakage, instability
 
 import pandas as pd
 import numpy as np
 import torch
 import torch.nn as nn
+import random
 
 from sklearn.preprocessing import MinMaxScaler
 from torch.utils.data import Dataset, DataLoader
@@ -16,11 +17,22 @@ from models.sales_transaction_item import SalesTransactionItem
 from models.item import Item
 
 
+# ===============================
+# 0️⃣ FIX RANDOMNESS (NEW)
+# ===============================
+SEED = 42
+torch.manual_seed(SEED)
+np.random.seed(SEED)
+random.seed(SEED)
+torch.backends.cudnn.deterministic = True
+torch.backends.cudnn.benchmark = False
+
+
 def run_time_series_forecast():
-    print("\n[ML] Demand prediction started (log-scaled)")
+    print("\n[ML] Stable demand prediction started")
 
     # ===============================
-    # 1️⃣ LOAD DATA (EXPLICIT JOIN)
+    # 1️⃣ LOAD DATA
     # ===============================
     rows = (
         db.session.query(
@@ -57,36 +69,37 @@ def run_time_series_forecast():
         .sort_index()
     )
 
-    print(f"[ML] Days of data: {len(daily)}")
-    print(f"[ML] Categories: {daily.columns.tolist()}")
-
-    if len(daily) < 5:
-        print("[ML] Not enough data to train")
+    if len(daily) < 14:
+        print("[ML] Not enough data")
         return None
 
     # ===============================
-    # 3️⃣ 🔑 LOG TRANSFORMATION (KEY FIX)
+    # 3️⃣ LOG TRANSFORM
     # ===============================
-    # log1p handles zeros safely
-    log_daily = np.log1p(daily.values)
+    values = np.log1p(daily.values)
 
     # ===============================
-    # 4️⃣ SCALE DATA
+    # 4️⃣ TRAIN / TEST SPLIT (NEW)
     # ===============================
+    split = int(len(values) * 0.8)
+    train_data = values[:split]
+    test_data = values[split:]
+
     scaler = MinMaxScaler()
-    scaled = scaler.fit_transform(log_daily)
+    train_scaled = scaler.fit_transform(train_data)
+    test_scaled = scaler.transform(test_data)
 
-    SEQ_LEN = min(30, len(scaled) - 1)
+    SEQ_LEN = min(30, len(train_scaled) - 1)
 
     # ===============================
-    # 5️⃣ DATASET
+    # 5️⃣ DATASET (NO SHUFFLE)
     # ===============================
     class TSDataset(Dataset):
-        def __init__(self, data, seq_len):
+        def __init__(self, data):
             self.X, self.y = [], []
-            for i in range(len(data) - seq_len):
-                self.X.append(data[i:i + seq_len])
-                self.y.append(data[i + seq_len])
+            for i in range(len(data) - SEQ_LEN):
+                self.X.append(data[i:i + SEQ_LEN])
+                self.y.append(data[i + SEQ_LEN])
 
         def __len__(self):
             return len(self.X)
@@ -97,16 +110,20 @@ def run_time_series_forecast():
                 torch.tensor(self.y[idx], dtype=torch.float32),
             )
 
-    dataset = TSDataset(scaled, SEQ_LEN)
-    loader = DataLoader(dataset, batch_size=32, shuffle=True)
+    train_ds = TSDataset(train_scaled)
+    train_loader = DataLoader(
+        train_ds,
+        batch_size=16,
+        shuffle=False  # ❌ DO NOT SHUFFLE TIME SERIES
+    )
 
     # ===============================
-    # 6️⃣ MODEL
+    # 6️⃣ MODEL (SIMPLIFIED, STABLE)
     # ===============================
     class LSTM(nn.Module):
         def __init__(self, features):
             super().__init__()
-            self.lstm = nn.LSTM(features, 64, num_layers=2, batch_first=True)
+            self.lstm = nn.LSTM(features, 64, batch_first=True)
             self.fc = nn.Linear(64, features)
 
         def forward(self, x):
@@ -118,73 +135,56 @@ def run_time_series_forecast():
     loss_fn = nn.MSELoss()
 
     # ===============================
-    # 7️⃣ TRAIN
+    # 7️⃣ TRAIN (MORE EPOCHS)
     # ===============================
-    print("\n[ML] Training model...")
-    for epoch in range(10):
+    print("[ML] Training...")
+    for epoch in range(60):
         total_loss = 0.0
-        for xb, yb in loader:
+        for xb, yb in train_loader:
             optimizer.zero_grad()
             loss = loss_fn(model(xb), yb)
             loss.backward()
             optimizer.step()
             total_loss += loss.item()
 
-        print(f"Epoch {epoch + 1}/10 | Loss: {total_loss:.4f}")
+        if (epoch + 1) % 10 == 0:
+            print(f"Epoch {epoch+1}/60 | Loss: {total_loss:.4f}")
 
     # ===============================
-    # 8️⃣ PREDICTION FUNCTION
+    # 8️⃣ PREDICTION (STABLE)
     # ===============================
     def predict(days):
         model.eval()
 
         seq = torch.tensor(
-            scaled[-SEQ_LEN:], dtype=torch.float32
+            train_scaled[-SEQ_LEN:], dtype=torch.float32
         ).unsqueeze(0)
 
         preds = []
 
         for _ in range(days):
             with torch.no_grad():
-                next_day = model(seq).numpy()[0]
+                next_step = model(seq)
 
-            preds.append(next_day)
-
+            preds.append(next_step.numpy()[0])
             seq = torch.cat(
-                [seq[:, 1:, :], torch.tensor(next_day).view(1, 1, -1)],
+                [seq[:, 1:, :], next_step.unsqueeze(1)],
                 dim=1
             )
 
-        # 🔄 INVERSE SCALE
         preds = scaler.inverse_transform(np.array(preds))
-
-        # 🔄 INVERSE LOG TRANSFORM
         preds = np.expm1(preds)
-
-        # Safety clamp
         return np.clip(preds, 0, None)
 
     # ===============================
-    # 9️⃣ MAKE PREDICTIONS
+    # 9️⃣ OUTPUT
     # ===============================
     pred_1 = predict(1)[0]
     pred_7 = predict(7)
     pred_30 = predict(30)
 
-    print("\n===== PREDICTED TOMORROW =====")
-    for i, cat in enumerate(daily.columns):
-        print(f"{cat}: {int(round(pred_1[i]))} units")
-
-    print("\n===== PREDICTED NEXT 7 DAYS (TOTAL) =====")
-    for i, cat in enumerate(daily.columns):
-        print(f"{cat}: {int(round(pred_7[:, i].sum()))} units")
-
-    print("\n===== PREDICTED NEXT 30 DAYS (TOTAL) =====")
-    for i, cat in enumerate(daily.columns):
-        print(f"{cat}: {int(round(pred_30[:, i].sum()))} units")
-
     return {
-        "tomorrow": dict(zip(daily.columns, pred_1.tolist())),
+        "tomorrow": dict(zip(daily.columns, pred_1.round().astype(int))),
         "next_7_days": {
             cat: int(pred_7[:, i].sum())
             for i, cat in enumerate(daily.columns)

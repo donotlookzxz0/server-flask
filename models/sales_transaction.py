@@ -1,5 +1,13 @@
 from db import db
 from datetime import datetime
+import pytz
+
+# 🇵🇭 Philippines Timezone
+PH_TZ = pytz.timezone("Asia/Manila")
+
+def ph_now():
+    # return PH time as naive datetime (no postgres changes needed)
+    return datetime.now(PH_TZ).replace(tzinfo=None)
 
 class SalesTransaction(db.Model):
     __tablename__ = "sales_transactions"
@@ -12,7 +20,12 @@ class SalesTransaction(db.Model):
         nullable=False
     )
 
-    date = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    # ✅ PHILIPPINES TIME (FLASK-ONLY)
+    date = db.Column(
+        db.DateTime,
+        nullable=False,
+        default=ph_now
+    )
 
     # One transaction → many items
     items = db.relationship(
@@ -22,7 +35,10 @@ class SalesTransaction(db.Model):
         cascade="all, delete-orphan"
     )
 
-    user = db.relationship("User", backref="sales_transactions")
+    user = db.relationship(
+        "User",
+        backref="sales_transactions"
+    )
 
     def __repr__(self):
         return f"<SalesTransaction {self.id}>"

@@ -1,23 +1,20 @@
 from functools import wraps
 from flask import request, jsonify, g
 import jwt
-
 from models.user import User
 
 JWT_SECRET = "super-secret"
 
-
 def require_auth(roles=("admin",)):
-    """
-    Restrict route access to authenticated users with allowed roles.
-    Default: admin-only
-    """
-
     def decorator(fn):
         @wraps(fn)
         def wrapper(*args, **kwargs):
-            token = request.cookies.get("access_token")
 
+            # ✅ ALWAYS ALLOW PREFLIGHT
+            if request.method == "OPTIONS":
+                return "", 200
+
+            token = request.cookies.get("access_token")
             if not token:
                 return jsonify({"error": "Authentication required"}), 401
 
@@ -25,7 +22,7 @@ def require_auth(roles=("admin",)):
                 payload = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
 
                 if payload.get("type") != "access":
-                    return jsonify({"error": "Invalid token type"}), 401
+                    return jsonify({"error": "Invalid token"}), 401
 
                 user = User.query.get(payload["user_id"])
                 if not user:
@@ -34,7 +31,6 @@ def require_auth(roles=("admin",)):
                 if roles and user.role not in roles:
                     return jsonify({"error": "Forbidden"}), 403
 
-                # Attach user to request context
                 g.current_user = user
 
             except jwt.ExpiredSignatureError:

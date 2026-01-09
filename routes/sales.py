@@ -15,7 +15,12 @@ sales_bp = Blueprint("sales", __name__)
 @sales_bp.route("/", methods=["GET"])
 @require_auth(roles=("admin",))
 def get_all_transactions():
-    transactions = SalesTransaction.query.all()
+    transactions = (
+        SalesTransaction.query
+        .order_by(SalesTransaction.date.desc())  # ✅ FIX: newest first
+        .all()
+    )
+
     result = []
 
     for t in transactions:
@@ -69,7 +74,7 @@ def get_transaction(id):
 # 🟢 CREATE new transaction (EVERY LOGGED-IN USER)
 # --------------------------------------------------
 @sales_bp.route("/", methods=["POST"])
-@require_auth(roles=None)   # ✅ allow admin, customer, staff
+@require_auth(roles=None)
 def create_transaction():
     data = request.get_json() or {}
     cart_items = data.get("items", [])
@@ -78,7 +83,7 @@ def create_transaction():
         return jsonify({"error": "No items provided"}), 400
 
     transaction = SalesTransaction(
-        user_id=g.current_user.id   # ✅ always valid
+        user_id=g.current_user.id
     )
     db.session.add(transaction)
 
@@ -129,7 +134,6 @@ def update_transaction(id):
     if not new_items:
         return jsonify({"error": "No items provided"}), 400
 
-    # Restore stock
     for ti in t.items:
         ti.item.quantity += ti.quantity
 

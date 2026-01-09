@@ -1,6 +1,7 @@
 # routes/users.py  (FULL FILE – COOKIE AUTH + /me – LOCALHOST FIXED)
 
 from flask import Blueprint, request, jsonify, make_response, g
+from werkzeug.security import generate_password_hash, check_password_hash
 from db import db
 from datetime import datetime, timedelta
 from models.user import User
@@ -66,8 +67,22 @@ def require_auth(roles=("admin",)):
 # GET CURRENT USER (USED BY VUE)
 # =========================
 @user_routes.route("/me", methods=["GET"])
-@require_auth(roles=("admin",))
-def me():
+@require_auth(roles=("admin",)) 
+def me_admin():
+    user = g.current_user
+    return jsonify({
+        "authenticated": True,
+        "id": user.id,
+        "username": user.username,
+        "role": user.role
+    }), 200
+
+# =========================
+# GET CURRENT USER (USED BY REACT)
+# =========================
+@user_routes.route("/me/customer", methods=["GET"])
+@require_auth(roles=("customer",)) 
+def me_customer():
     user = g.current_user
     return jsonify({
         "authenticated": True,
@@ -130,7 +145,7 @@ def create_user():
 
     user = User(
         username=data["username"],
-        password=data["password"],
+        password=generate_password_hash(data["password"]),
         role=data.get("role", "customer"),
     )
 
@@ -148,7 +163,7 @@ def login():
     data = request.json or {}
 
     user = User.query.filter_by(username=data.get("username")).first()
-    if not user or user.password != data.get("password"):
+    if not user or not check_password_hash(user.password, data.get("password")):
         return jsonify({"error": "invalid credentials"}), 401
 
     access_token = create_token(user.id, "access")
@@ -179,6 +194,30 @@ def login():
 
     return resp, 200
 
+# Register Customer
+@user_routes.route("/register", methods=["POST"])
+def register():
+    data = request.get_json() or {}
+
+    username = data.get("username")
+    password = data.get("password")
+
+    if not username or not password:
+        return jsonify({"error": "Username and password required"}), 400
+
+    if User.query.filter_by(username=username).first():
+        return jsonify({"error": "Username already exists"}), 409
+
+    user = User(
+        username=username,
+        password=generate_password_hash(password),
+        role="customer"
+    )
+
+    db.session.add(user)
+    db.session.commit()
+
+    return jsonify({"message": "Account created"}), 201
 
 # =========================
 # REFRESH TOKEN
@@ -216,18 +255,29 @@ def refresh():
 
 
 # =========================
-# LOGOUT
+# LOGOUT 
 # =========================
 @user_routes.route("/logout", methods=["POST"])
 def logout():
-    token = request.cookies.get("refresh_token")
-    if token:
-        user = User.query.filter_by(refresh_token=token).first()
-        if user:
-            user.refresh_token = None
-            db.session.commit()
+    refresh_token = request.cookies.get("refresh_token")
+
+    if refresh_token:
+        try:
+            payload = jwt.decode(refresh_token, JWT_SECRET, algorithms=["HS256"])
+
+            if payload.get("type") == "refresh":
+                user = User.query.get(payload.get("user_id"))
+                if user and user.refresh_token == refresh_token:
+                    user.refresh_token = None
+                    db.session.commit()
+
+        except jwt.InvalidTokenError:
+            pass  # Token already invalid / expired → still logout
 
     resp = make_response(jsonify({"message": "logged out"}))
-    resp.delete_cookie("access_token")
-    resp.delete_cookie("refresh_token")
+
+    # Explicit cookie clearing (important for browsers)
+    resp.delete_cookie("access_token", path="/")
+    resp.delete_cookie("refresh_token", path="/")
+
     return resp, 200
