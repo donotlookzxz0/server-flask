@@ -19,10 +19,12 @@ ACCESS_EXPIRES = timedelta(minutes=15)
 REFRESH_EXPIRES = timedelta(days=7)
 
 # ✅ REQUIRED FOR VERCEL / SAFARI / IOS
+# 🔥 FIX: added path="/"
 COOKIE_KWARGS = dict(
     httponly=True,
     samesite="None",   # 🔥 CRITICAL
-    secure=True        # 🔥 CRITICAL
+    secure=True,       # 🔥 CRITICAL
+    path="/"           # 🔥 IMPORTANT (mobile + consistency)
 )
 
 # --------------------------------------------------
@@ -174,7 +176,6 @@ def login():
         "role": user.role
     }))
 
-    # 🔥 FIXED COOKIE FLAGS
     resp.set_cookie("access_token", access_token, **COOKIE_KWARGS)
     resp.set_cookie("refresh_token", refresh_token, **COOKIE_KWARGS)
 
@@ -250,6 +251,7 @@ def logout():
             pass
 
     resp = make_response(jsonify({"message": "logged out"}))
-    resp.delete_cookie("access_token")
-    resp.delete_cookie("refresh_token")
+    # 🔥 FIX: delete cookies with SAME FLAGS
+    resp.delete_cookie("access_token", **COOKIE_KWARGS)
+    resp.delete_cookie("refresh_token", **COOKIE_KWARGS)
     return resp, 200
