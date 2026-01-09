@@ -1,5 +1,5 @@
 # app.py
-# FINAL SAFE VERSION — COOKIE AUTH + POSTGRES + CORS (ACTUALLY WORKING)
+# FINAL SAFE VERSION — COOKIE AUTH + POSTGRES + CORS (PRODUCTION READY)
 
 import os
 from flask import Flask, request, jsonify
@@ -8,36 +8,40 @@ from flask_cors import CORS
 from db import db
 from urls import register_routes
 
-# from ml.recommender.trainer import retrain_model
-
 app = Flask(__name__)
 
 # --------------------------------------------------
-# 🔐 SECURITY / COOKIE CONFIG
+# 🔐 SECURITY / COOKIE CONFIG (REQUIRED FOR VERCEL)
 # --------------------------------------------------
 app.config["SECRET_KEY"] = "super-secret"
 
-# JWT stored in cookies
 app.config["SESSION_COOKIE_HTTPONLY"] = True
-app.config["SESSION_COOKIE_SAMESITE"] = "None"   # REQUIRED for cross-origin
-app.config["SESSION_COOKIE_SECURE"] = False      # Set True when using HTTPS
+app.config["SESSION_COOKIE_SAMESITE"] = "None"   # REQUIRED for cross-origin cookies
+app.config["SESSION_COOKIE_SECURE"] = True       # ✅ MUST be TRUE (HTTPS)
 
 # --------------------------------------------------
-# 🌍 CORS (ALLOW CREDENTIALS)
+# 🌍 CORS (ALLOW CREDENTIALS + CRUD)
 # --------------------------------------------------
 CORS(
     app,
     supports_credentials=True,
     origins=[
+        # 🧪 Local development
         "http://localhost:5173",
         "http://127.0.0.1:5173",
         "http://localhost:3000",
-        "http://127.0.0.1:3000"
-    ]
+        "http://127.0.0.1:3000",
+
+        # 🚀 Vercel frontends
+        "https://pi-mart-client-goaz.vercel.app",
+        "https://test-deploy-t7yv.vercel.app",
+    ],
+    methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization"]
 )
 
 # --------------------------------------------------
-# 🚫 GLOBAL PREFLIGHT HANDLER
+# 🚫 GLOBAL PREFLIGHT HANDLER (OPTIONS)
 # --------------------------------------------------
 @app.before_request
 def handle_options():
