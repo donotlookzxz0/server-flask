@@ -8,7 +8,9 @@ class PendingCashPayment(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, nullable=False)
 
-    code = db.Column(db.String(6), unique=True, nullable=False)
+    # Admin-generated only
+    code = db.Column(db.String(6), unique=True, nullable=True)
+
     cart = db.Column(JSON, nullable=False)
 
     status = db.Column(
@@ -18,4 +20,3 @@ class PendingCashPayment(db.Model):
     )
 
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    expires_at = db.Column(db.DateTime, nullable=True)

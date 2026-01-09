@@ -1,7 +1,6 @@
 from db import db
 from models.pending_cash_payment import PendingCashPayment
-from utils.cash_code import generate_unique_cash_code
-from datetime import datetime, timedelta
+import random
 
 class AdminCashPaymentService:
 
@@ -15,16 +14,17 @@ class AdminCashPaymentService:
         if not pending:
             raise Exception("Pending cash request not found")
 
-        # Generate unique 6-digit code
-        updated_pending = generate_unique_cash_code(
-            user_id=pending.user_id,
-            cart=pending.cart,
-            expires_at=datetime.utcnow() + timedelta(minutes=10)
-        )
+        if pending.code:
+            raise Exception("Cash code already generated for this request")
 
-        # Save generated code
-        pending.code = updated_pending.code
-        pending.expires_at = updated_pending.expires_at
+        # Generate unique 6-digit code
+        while True:
+            code = f"{random.randint(100000, 999999)}"
+            exists = PendingCashPayment.query.filter_by(code=code).first()
+            if not exists:
+                break
+
+        pending.code = code
         db.session.commit()
 
         return pending
