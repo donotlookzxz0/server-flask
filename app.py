@@ -19,7 +19,7 @@ app.config["SECRET_KEY"] = "super-secret"
 # JWT stored in cookies
 app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_SAMESITE"] = "None"   # REQUIRED for cross-origin
-app.config["SESSION_COOKIE_SECURE"] = False      # True only if HTTPS
+app.config["SESSION_COOKIE_SECURE"] = False      # Set True when using HTTPS
 
 # --------------------------------------------------
 # 🌍 CORS (ALLOW CREDENTIALS)
@@ -30,13 +30,13 @@ CORS(
     origins=[
         "http://localhost:5173",
         "http://127.0.0.1:5173",
-         "http://localhost:3000", # Testing Client for Customers
-        "http://127.0.0.1:3000" 
+        "http://localhost:3000",
+        "http://127.0.0.1:3000"
     ]
 )
 
 # --------------------------------------------------
-# 🚫 GLOBAL PREFLIGHT HANDLER (THIS WAS MISSING)
+# 🚫 GLOBAL PREFLIGHT HANDLER
 # --------------------------------------------------
 @app.before_request
 def handle_options():
@@ -46,10 +46,11 @@ def handle_options():
         return response
 
 # --------------------------------------------------
-# 🗄 DATABASE (POSTGRES)
+# 🗄 DATABASE (POSTGRESQL — RENDER)
 # --------------------------------------------------
 app.config["SQLALCHEMY_DATABASE_URI"] = (
-    "postgresql://postgres:12345678@localhost:5432/rat"
+    "postgresql://thesis_nt63_user:XgdoCNcLQ1Du441DQY8Nf64A8Ecpuy1H@"
+    "dpg-d5glstf5r7bs73egb930-a.singapore-postgres.render.com/thesis_nt63"
 )
 
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
@@ -77,10 +78,8 @@ def index():
 # 🚀 START SERVER
 # --------------------------------------------------
 if __name__ == "__main__":
-    # import threading
     with app.app_context():
         db.create_all()
-        # threading.Thread(target=retrain_model, daemon=True).start()
 
     app.run(
         host="0.0.0.0",
