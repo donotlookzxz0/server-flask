@@ -5,7 +5,7 @@ from models.sales_transaction import SalesTransaction
 from models.sales_transaction_item import SalesTransactionItem
 from models.item import Item
 
-from utils.auth_restrict import require_auth
+# from utils.auth_restrict import require_auth
 
 sales_bp = Blueprint("sales", __name__)
 
@@ -13,7 +13,7 @@ sales_bp = Blueprint("sales", __name__)
 # 🔵 GET all transactions (ADMIN ONLY)
 # --------------------------------------------------
 @sales_bp.route("/", methods=["GET"])
-@require_auth(roles=("admin",))
+# @require_auth(roles=("admin",))
 def get_all_transactions():
     transactions = (
         SalesTransaction.query
@@ -45,7 +45,7 @@ def get_all_transactions():
 # 🔵 GET single transaction (ADMIN ONLY)
 # --------------------------------------------------
 @sales_bp.route("/<int:id>", methods=["GET"])
-@require_auth(roles=("admin",))
+# @require_auth(roles=("admin",))
 def get_transaction(id):
     t = SalesTransaction.query.get(id)
     if not t:
@@ -72,7 +72,7 @@ def get_transaction(id):
 # 🟢 CREATE transaction (ANY AUTHENTICATED USER)
 # --------------------------------------------------
 @sales_bp.route("/", methods=["POST"])
-@require_auth()   # ✅ FIXED
+# @require_auth()   # ✅ FIXED
 def create_transaction():
     data = request.get_json() or {}
     cart_items = data.get("items", [])
@@ -118,7 +118,7 @@ def create_transaction():
 # 🔵 UPDATE transaction (ADMIN ONLY)
 # --------------------------------------------------
 @sales_bp.route("/<int:id>", methods=["PUT"])
-@require_auth(roles=("admin",))
+# @require_auth(roles=("admin",))
 def update_transaction(id):
     t = SalesTransaction.query.get(id)
     if not t:
@@ -160,7 +160,7 @@ def update_transaction(id):
 # 🔴 DELETE transaction (ADMIN ONLY)
 # --------------------------------------------------
 @sales_bp.route("/<int:id>", methods=["DELETE"])
-@require_auth(roles=("admin",))
+# @require_auth(roles=("admin",))
 def delete_transaction(id):
     t = SalesTransaction.query.get(id)
     if not t:

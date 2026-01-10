@@ -1,13 +1,13 @@
 from flask import Blueprint, jsonify
 from ml.recommender.inference import recommend_for_user
-from utils.auth_restrict import require_auth
+# from utils.auth_restrict import require_auth
 from models.user import User
 
 recommendations_bp = Blueprint("recommendations_bp", __name__)
 
 # GET recommendations for a SINGLE user
 @recommendations_bp.route("/recommendations/<int:user_id>", methods=["GET"])
-@require_auth()
+# @require_auth()
 def get_recommendations(user_id):
     items = recommend_for_user(user_id)
 
@@ -26,7 +26,7 @@ def get_recommendations(user_id):
 
 # GET recommendations for ALL users
 @recommendations_bp.route("/recommendations", methods=["GET"])
-@require_auth()
+# @require_auth()
 def get_all_recommendations():
     users = User.query.all()
     if not users:

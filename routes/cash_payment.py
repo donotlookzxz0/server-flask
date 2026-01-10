@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify, g
 from services.cash_payment_service import CashPaymentService
 from models.pending_cash_payment import PendingCashPayment
-from utils.auth_restrict import require_auth
+# from utils.auth_restrict import require_auth
 
 cash_payment_bp = Blueprint("cash_payment", __name__)
 
@@ -9,7 +9,7 @@ cash_payment_bp = Blueprint("cash_payment", __name__)
 # STEP 1: CUSTOMER REQUESTS CASH PAYMENT (NO CODE)
 # -----------------------
 @cash_payment_bp.route("/start", methods=["POST"])
-@require_auth(roles=("customer",))
+# @require_auth(roles=("customer",))
 def start_cash_payment():
     data = request.get_json()
     cart = data.get("cart", [])
@@ -36,7 +36,7 @@ def start_cash_payment():
 # STEP 2: CUSTOMER POLLS STATUS (ADMIN GENERATES CODE)
 # -----------------------
 @cash_payment_bp.route("/status/<int:pending_id>", methods=["GET"])
-@require_auth(roles=("customer",))
+# @require_auth(roles=("customer",))
 def cash_status(pending_id):
     pending = PendingCashPayment.query.filter_by(
         id=pending_id,
@@ -56,7 +56,7 @@ def cash_status(pending_id):
 # STEP 3: CUSTOMER CONFIRMS PAYMENT
 # -----------------------
 @cash_payment_bp.route("/confirm", methods=["POST"])
-@require_auth(roles=("customer",))
+# @require_auth(roles=("customer",))
 def confirm_cash():
     code = request.json.get("code")
     if not code:
@@ -77,7 +77,7 @@ def confirm_cash():
 # STEP 4: CUSTOMER CANCELS REQUEST (OPTIONAL)
 # -----------------------
 @cash_payment_bp.route("/cancel/<int:pending_id>", methods=["POST"])
-@require_auth(roles=("customer",))
+# @require_auth(roles=("customer",))
 def cancel_cash(pending_id):
     pending = PendingCashPayment.query.filter_by(
         id=pending_id,

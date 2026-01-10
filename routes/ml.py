@@ -14,7 +14,7 @@ from models.ai_forecast import AIForecast
 from models.ai_item_movement import AIItemMovement
 from models.ai_stockout_risk import AIStockoutRisk
 
-from utils.auth_restrict import require_auth
+# from utils.auth_restrict import require_auth
 
 
 ml_bp = Blueprint("ml_bp", __name__)
@@ -24,7 +24,7 @@ ml_bp = Blueprint("ml_bp", __name__)
 # =================================================
 
 @ml_bp.route("/forecast", methods=["POST"])
-@require_auth()
+# @require_auth()
 def create_forecast():
     try:
         result = run_time_series_forecast()
@@ -64,7 +64,7 @@ def create_forecast():
 
 
 @ml_bp.route("/forecast", methods=["GET"])
-@require_auth()
+# @require_auth()
 def get_forecasts_grouped():
     forecasts = AIForecast.query.order_by(AIForecast.category).all()
 
@@ -93,7 +93,7 @@ def get_forecasts_grouped():
 
 
 @ml_bp.route("/forecast/<int:id>", methods=["PUT"])
-@require_auth()
+# @require_auth()
 def update_forecast(id):
     forecast = AIForecast.query.get(id)
     if not forecast:
@@ -108,7 +108,7 @@ def update_forecast(id):
 
 
 @ml_bp.route("/forecast/<int:id>", methods=["DELETE"])
-@require_auth()
+# @require_auth()
 def delete_forecast(id):
     forecast = AIForecast.query.get(id)
     if not forecast:
@@ -124,7 +124,7 @@ def delete_forecast(id):
 # =================================================
 
 @ml_bp.route("/item-movement-forecast", methods=["POST"])
-@require_auth()
+# @require_auth()
 def create_item_movement_forecast():
     try:
         ok = run_item_movement_forecast()
@@ -139,7 +139,7 @@ def create_item_movement_forecast():
 
 
 @ml_bp.route("/item-movement-forecast", methods=["GET"])
-@require_auth()
+# @require_auth()
 def get_item_movement_forecast():
     records = AIItemMovement.query.order_by(AIItemMovement.category).all()
     return jsonify([
@@ -161,7 +161,7 @@ def get_item_movement_forecast():
 # =================================================
 
 @ml_bp.route("/stockout-risk", methods=["POST"])
-@require_auth()
+# @require_auth()
 def create_stockout_risk():
     try:
         ok = run_stockout_risk_forecast()
@@ -176,7 +176,7 @@ def create_stockout_risk():
 
 
 @ml_bp.route("/stockout-risk", methods=["GET"])
-@require_auth()
+# @require_auth()
 def get_stockout_risk():
     priority_order = case(
         (AIStockoutRisk.risk_level == "High", 1),
