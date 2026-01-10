@@ -26,8 +26,8 @@ CORS(
     app,
     supports_credentials=True,
     origins=[
-        "https://pi-mart-client-goaz.vercel.app",   # 📱 Mobile
-        "https://test-deploy-t7yv.vercel.app",      # 🖥 PC
+        "https://test-customer-react.vercel.app",   # 📱 Mobile
+        "https://admin-vue-iota.vercel.app",      # 🖥 PC
     ],
     allow_headers=["Content-Type", "Authorization"],
     expose_headers=["Set-Cookie"],  # 🔥 CRITICAL
@@ -46,8 +46,7 @@ def handle_options():
 # --------------------------------------------------
 app.config["SQLALCHEMY_DATABASE_URI"] = os.getenv(
     "DATABASE_URL",
-    "postgresql://thesis_nt63_user:XgdoCNcLQ1Du441DQY8Nf64A8Ecpuy1H@"
-    "dpg-d5glstf5r7bs73egb930-a.singapore-postgres.render.com/thesis_nt63"
+    "postgresql://flasktest_user:Ici71C1Ifl72YQv9ton4bCLzXosvqVun@dpg-d5h2392li9vc73a6cvj0-a/flasktest"
 )
 
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
