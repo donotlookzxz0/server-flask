@@ -55,6 +55,10 @@ app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
 
 db.init_app(app)
 
+@app.route("/__db_check")
+def db_check():
+    return {"DATABASE_URL": os.environ.get("DATABASE_URL")}
+
 # --------------------------------------------------
 # 🔗 ROUTES
 # --------------------------------------------------
@@ -66,9 +70,7 @@ register_routes(app)
 @app.route("/", methods=["GET"])
 def index():
     return {"message": "Flask API running successfully"}
-@app.route("/__db_check")
-def db_check():
-    return {"DATABASE_URL": os.environ.get("DATABASE_URL")}
+
 
 # --------------------------------------------------
 # 🚀 START SERVER
