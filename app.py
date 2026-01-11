@@ -44,10 +44,10 @@ def handle_options():
 # --------------------------------------------------
 # 🗄 DATABASE (POSTGRESQL — RENDER)
 # --------------------------------------------------
-app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get(
-    "DATABASE_URL",
-    "postgresql://flasktest_user:Ici71C1Ifl72YQv9ton4bCLzXosvqVun@dpg-d5h2392li9vc73a6cvj0-a.singapore-postgres.render.com/flasktest"  
-)
+DATABASE_URL = os.environ["DATABASE_URL"]  # crash if missing
+
+app.config["SQLALCHEMY_DATABASE_URI"] = DATABASE_URL
+
 
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
