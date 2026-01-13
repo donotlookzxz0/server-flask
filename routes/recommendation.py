@@ -56,5 +56,6 @@ def get_all_recommendations():
 @recommendations_bp.route("/recommendations/train", methods=["POST"])
 # @require_auth(roles=("admin",))
 def train_recommender():
-    retrain_model()
-    return jsonify({"success": True}), 201
+    import threading
+    threading.Thread(target=retrain_model, daemon=True).start()
+    return jsonify({"success": True, "message": "Training started"}), 202
