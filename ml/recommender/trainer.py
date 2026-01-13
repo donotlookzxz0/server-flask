@@ -3,6 +3,8 @@ import torch.nn as nn
 from torch.utils.data import DataLoader, Dataset
 
 from models.item import Item
+from models.ai_recommendation import AIRecommendation
+from db import db
 from .model import MFModel
 from .dataset import build_interactions
 from . import state
@@ -135,7 +137,15 @@ def update_model_with_transactions(new_transactions, epochs=5):
     n_items = len(state.item_map)
 
     new_model = MFModel(n_users, n_items)
-    new_model.load_state_dict(old_model.state_dict(), strict=False)
+
+    # Copy old user embeddings
+    new_model.user_emb.weight.data[:old_model.user_emb.num_embeddings] = \
+        old_model.user_emb.weight.data
+
+    # Copy old item embeddings
+    new_model.item_emb.weight.data[:old_model.item_emb.num_embeddings] = \
+        old_model.item_emb.weight.data
+
     state.model = new_model
 
     # -------------------------
