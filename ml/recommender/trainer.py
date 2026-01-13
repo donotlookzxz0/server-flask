@@ -10,7 +10,7 @@ from .dataset import build_interactions
 from . import state
 
 # CONFIG
-TOP_N = 10
+TOP_N = 5
 
 
 class InteractionDataset(Dataset):
@@ -24,7 +24,7 @@ class InteractionDataset(Dataset):
         return self.data[idx]
 
 
-def retrain_model(epochs=2):
+def retrain_model(epochs=5):
     """
     Full retraining from scratch
     Persists TOP-N item scores per user only
@@ -54,7 +54,7 @@ def retrain_model(epochs=2):
 
     loader = DataLoader(
         InteractionDataset(data),
-        batch_size=8,
+        batch_size=32,
         shuffle=True
     )
 
