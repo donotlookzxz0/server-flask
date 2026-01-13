@@ -24,7 +24,7 @@ class InteractionDataset(Dataset):
         return self.data[idx]
 
 
-def retrain_model(epochs=5):
+def retrain_model(epochs=2):
     """
     Full retraining from scratch
     Persists TOP-N item scores per user only
@@ -54,7 +54,7 @@ def retrain_model(epochs=5):
 
     loader = DataLoader(
         InteractionDataset(data),
-        batch_size=32,
+        batch_size=8,
         shuffle=True
     )
 
