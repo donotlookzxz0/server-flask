@@ -7,6 +7,9 @@ from .model import MFModel
 from .dataset import build_interactions
 from . import state
 
+# CONFIG
+TOP_N = 10
+
 
 class InteractionDataset(Dataset):
     def __init__(self, data):
@@ -19,9 +22,10 @@ class InteractionDataset(Dataset):
         return self.data[idx]
 
 
-def retrain_model(epochs=30):
+def retrain_model(epochs=5):
     """
-    Full retraining from scratch (existing function)
+    Full retraining from scratch
+    Persists TOP-N item scores per user only
     """
     interactions = build_interactions()
 
@@ -38,6 +42,7 @@ def retrain_model(epochs=30):
     state.user_map = {uid: idx for idx, uid in enumerate(user_ids)}
     state.item_map = {iid: idx for idx, iid in enumerate(item_ids)}
 
+    # Build training data
     data = []
     for uid, items_ in interactions.items():
         uidx = state.user_map[uid]
@@ -45,7 +50,11 @@ def retrain_model(epochs=30):
             if iid in state.item_map:
                 data.append((uidx, state.item_map[iid], float(qty)))
 
-    loader = DataLoader(InteractionDataset(data), batch_size=32, shuffle=True)
+    loader = DataLoader(
+        InteractionDataset(data),
+        batch_size=32,
+        shuffle=True
+    )
 
     model = MFModel(len(state.user_map), len(state.item_map))
     opt = torch.optim.Adam(model.parameters(), lr=0.01)
@@ -59,63 +68,79 @@ def retrain_model(epochs=30):
             loss.backward()
             opt.step()
 
-    # update state
+    # =========================
+    # UPDATE STATE (TOP-N ONLY)
+    # =========================
     model.eval()
     state.model = model
     state.score_matrix = {}
 
     with torch.no_grad():
         for uid, uidx in state.user_map.items():
-            state.score_matrix[uid] = {}
+            scores = []
+
             for iid, iidx in state.item_map.items():
-                score = (model.user_emb.weight[uidx] * model.item_emb.weight[iidx]).sum().item()
-                state.score_matrix[uid][iid] = score
+                score = (
+                    model.user_emb.weight[uidx]
+                    * model.item_emb.weight[iidx]
+                ).sum().item()
+                scores.append((iid, score))
+
+            scores.sort(key=lambda x: x[1], reverse=True)
+            state.score_matrix[uid] = dict(scores[:TOP_N])
 
 
-
-# NEW FUNCTION: Incremental Update
+# ======================================================
+# INCREMENTAL UPDATE (NEW TRANSACTIONS ONLY)
+# ======================================================
 def update_model_with_transactions(new_transactions, epochs=5):
     """
-    Update model incrementally with new transactions only.
-    Adds new users/items to embedding matrices.
+    Incremental update using new transactions only.
+    Recomputes TOP-N scores for affected users.
     """
     if state.model is None or not state.user_map or not state.item_map:
-        # no model exists, fall back to full retrain
         retrain_model()
         return
 
-    # new users/items
+    # -------------------------
+    # Detect new users/items
+    # -------------------------
     existing_user_ids = set(state.user_map.keys())
     existing_item_ids = set(state.item_map.keys())
 
     new_user_ids = {tx.user_id for tx in new_transactions} - existing_user_ids
+
     new_item_ids = set()
     for tx in new_transactions:
-        new_item_ids.update({ti.item_id for ti in tx.items})
+        new_item_ids.update(ti.item_id for ti in tx.items)
     new_item_ids -= existing_item_ids
 
-    # Update user_map and item_map
+    # Update user_map
     next_user_idx = len(state.user_map)
     for uid in new_user_ids:
         state.user_map[uid] = next_user_idx
         next_user_idx += 1
 
+    # Update item_map
     next_item_idx = len(state.item_map)
     for iid in new_item_ids:
         state.item_map[iid] = next_item_idx
         next_item_idx += 1
 
+    # -------------------------
+    # Expand model
+    # -------------------------
+    old_model = state.model
     n_users = len(state.user_map)
     n_items = len(state.item_map)
 
-    # Expand embedding matrices for new users/items
-    old_model = state.model
     new_model = MFModel(n_users, n_items)
-    new_model.load_state_dict(old_model.state_dict(), strict=False)  # keep old weights
-
+    new_model.load_state_dict(old_model.state_dict(), strict=False)
     state.model = new_model
 
-    # Build dataset for new transactions only
+    # -------------------------
+    # Train on new data only
+    # -------------------------
     data = []
     for tx in new_transactions:
         uidx = state.user_map[tx.user_id]
@@ -127,7 +152,12 @@ def update_model_with_transactions(new_transactions, epochs=5):
     if not data:
         return
 
-    loader = DataLoader(InteractionDataset(data), batch_size=32, shuffle=True)
+    loader = DataLoader(
+        InteractionDataset(data),
+        batch_size=32,
+        shuffle=True
+    )
+
     opt = torch.optim.Adam(new_model.parameters(), lr=0.01)
     loss_fn = nn.MSELoss()
 
@@ -139,14 +169,23 @@ def update_model_with_transactions(new_transactions, epochs=5):
             loss.backward()
             opt.step()
 
-    # Update score matrix for affected users/items
+    # -------------------------
+    # Recompute TOP-N for affected users
+    # -------------------------
     new_model.eval()
+    affected_users = {tx.user_id for tx in new_transactions}
+
     with torch.no_grad():
-        for tx in new_transactions:
-            uid = tx.user_id
+        for uid in affected_users:
             uidx = state.user_map[uid]
-            state.score_matrix.setdefault(uid, {})
-            for ti in tx.items:
-                iid = ti.item_id
-                iidx = state.item_map[iid]
-                state.score_matrix[uid][iid] = (new_model.user_emb.weight[uidx] * new_model.item_emb.weight[iidx]).sum().item()
+            scores = []
+
+            for iid, iidx in state.item_map.items():
+                score = (
+                    new_model.user_emb.weight[uidx]
+                    * new_model.item_emb.weight[iidx]
+                ).sum().item()
+                scores.append((iid, score))
+
+            scores.sort(key=lambda x: x[1], reverse=True)
+            state.score_matrix[uid] = dict(scores[:TOP_N])
