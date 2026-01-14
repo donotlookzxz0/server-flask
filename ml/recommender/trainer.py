@@ -54,7 +54,7 @@ def retrain_model(epochs=5):
 
     loader = DataLoader(
         InteractionDataset(data),
-        batch_size=32,
+        batch_size=16,
         shuffle=True
     )
 
@@ -91,7 +91,17 @@ def retrain_model(epochs=5):
             scores.sort(key=lambda x: x[1], reverse=True)
             state.score_matrix[uid] = dict(scores[:TOP_N])
 
+    AIRecommendation.query.delete()
 
+    for uid, item_scores in state.score_matrix.items():
+        for iid, score in item_scores.items():
+            db.session.add(AIRecommendation(
+            user_id=uid,
+            item_id=iid,
+            score=score
+        ))
+
+    db.session.commit()
 # ======================================================
 # INCREMENTAL UPDATE (NEW TRANSACTIONS ONLY)
 # ======================================================
@@ -164,7 +174,7 @@ def update_model_with_transactions(new_transactions, epochs=5):
 
     loader = DataLoader(
         InteractionDataset(data),
-        batch_size=32,
+        batch_size=16,
         shuffle=True
     )
 
