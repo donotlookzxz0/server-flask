@@ -1,6 +1,5 @@
 from models.item import Item
 from models.ai_recommendation import AIRecommendation
-from models.sales_transaction import SalesTransaction
 
 def recommend_for_user(user_id, top_n=5):
     rows = (
@@ -14,9 +13,10 @@ def recommend_for_user(user_id, top_n=5):
     if not rows:
         return []
 
-    item_ids = list({
-    ti.item_id
-        for tx in SalesTransaction.query.all()
-        for ti in tx.items
-    })
-    return Item.query.filter(Item.id.in_(item_ids)).all()
+    item_ids = [r.item_id for r in rows]
+
+    # preserve ranking order
+    items = Item.query.filter(Item.id.in_(item_ids)).all()
+    item_map = {i.id: i for i in items}
+
+    return [item_map[iid] for iid in item_ids if iid in item_map]

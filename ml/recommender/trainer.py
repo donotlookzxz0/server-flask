@@ -30,6 +30,7 @@ def retrain_model(epochs=5):
     Persists TOP-N item scores per user only
     """
     interactions = build_interactions()
+    print("[TRAIN] users with interactions:", len(interactions))
 
     if not interactions:
         state.model = None
@@ -39,7 +40,11 @@ def retrain_model(epochs=5):
         return
 
     user_ids = list(interactions.keys())
-    item_ids = [i.id for i in Item.query.all()]
+    item_ids = list({
+        iid
+        for items in interactions.values()
+        for iid in items.keys()
+    })
 
     state.user_map = {uid: idx for idx, uid in enumerate(user_ids)}
     state.item_map = {iid: idx for idx, iid in enumerate(item_ids)}
@@ -51,13 +56,15 @@ def retrain_model(epochs=5):
         for iid, qty in items_.items():
             if iid in state.item_map:
                 data.append((uidx, state.item_map[iid], float(qty)))
+                
+    print("[TRAIN] total interaction points:", len(data))
 
     loader = DataLoader(
         InteractionDataset(data),
         batch_size=16,
         shuffle=True
     )
-
+    
     model = MFModel(len(state.user_map), len(state.item_map))
     opt = torch.optim.Adam(model.parameters(), lr=0.01)
     loss_fn = nn.MSELoss()
@@ -90,7 +97,7 @@ def retrain_model(epochs=5):
 
             scores.sort(key=lambda x: x[1], reverse=True)
             state.score_matrix[uid] = dict(scores[:TOP_N])
-
+    print("[TRAIN] Writing recommendations to DB")
     AIRecommendation.query.delete()
 
     for uid, item_scores in state.score_matrix.items():
@@ -102,6 +109,7 @@ def retrain_model(epochs=5):
         ))
 
     db.session.commit()
+    print("[TRAIN] DB commit complete")
 # ======================================================
 # INCREMENTAL UPDATE (NEW TRANSACTIONS ONLY)
 # ======================================================

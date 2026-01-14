@@ -3,6 +3,7 @@ from ml.recommender.inference import recommend_for_user
 # from utils.auth_restrict import require_auth
 from models.user import User
 from ml.recommender.trainer import retrain_model
+from flask import current_app
 
 recommendations_bp = Blueprint("recommendations_bp", __name__)
 
@@ -54,8 +55,14 @@ def get_all_recommendations():
     return jsonify(all_recommendations), 200
 
 @recommendations_bp.route("/recommendations/train", methods=["POST"])
-# @require_auth(roles=("admin",))
 def train_recommender():
+    app = current_app._get_current_object()
+
+    def task():
+        with app.app_context():
+            retrain_model()
+
     import threading
-    threading.Thread(target=retrain_model, daemon=True).start()
+    threading.Thread(target=task, daemon=True).start()
+
     return jsonify({"success": True, "message": "Training started"}), 202
