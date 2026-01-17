@@ -7,6 +7,8 @@ from flask import current_app
 
 recommendations_bp = Blueprint("recommendations_bp", __name__)
 
+_training_in_progress = False
+
 # GET recommendations for a SINGLE user
 @recommendations_bp.route("/recommendations/<int:user_id>", methods=["GET"])
 # @require_auth()
@@ -56,13 +58,32 @@ def get_all_recommendations():
 
 @recommendations_bp.route("/recommendations/train", methods=["POST"])
 def train_recommender():
-    app = current_app._get_current_object()
+    global _training_in_progress
 
-    def task():
-        with app.app_context():
-            retrain_model()
+    if _training_in_progress:
+        return jsonify({
+            "success": False,
+            "message": "Training already in progress"
+        }), 409  # Conflict
 
-    import threading
-    threading.Thread(target=task, daemon=True).start()
+    try:
+        _training_in_progress = True
 
-    return jsonify({"success": True, "message": "Training started"}), 202
+        # BLOCKING — this is intentional
+        retrain_model()
+
+        return jsonify({
+            "success": True,
+            "message": "Training completed successfully"
+        }), 200
+
+    except Exception as e:
+        current_app.logger.exception("Training failed")
+        return jsonify({
+            "success": False,
+            "message": "Training failed",
+            "error": str(e)
+        }), 500
+
+    finally:
+        _training_in_progress = False
